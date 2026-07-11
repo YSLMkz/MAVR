@@ -107,6 +107,12 @@
   .photo-add svg { width: 24px; height: 24px; }
   .photo-add span { font-size: 10px; color: var(--mavr-blue-dark); }
   .photo svg { width: 30px; height: 30px; opacity: 0.85; }
+  .photo-prev { width: 74px; height: 74px; border-radius: 12px; flex-shrink: 0;
+    position: relative; background-size: cover; background-position: center; }
+  .photo-prev .rm { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--bg); border: 0.5px solid var(--sep);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .photo-prev .rm svg { width: 12px; height: 12px; opacity: 1; }
   input[type=text], textarea {
     width: 100%; font-size: 15px; font-family: inherit;
     background: var(--card); border: none; border-radius: 10px;
@@ -186,12 +192,13 @@
   <div class="form">
     <div class="field">
       <label class="label">Фото</label>
-      <div class="photos">
-        <div class="photo-add">
+      <div class="photos" id="photosBox">
+        <div class="photo-add" onclick="document.getElementById('f-photos').click()">
           <svg viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           <span>Добавить</span>
         </div>
       </div>
+      <input type="file" id="f-photos" accept="image/*" multiple style="display:none" onchange="onPhotosPicked(event)">
     </div>
     <div class="field">
       <label class="label">Название</label>
@@ -259,12 +266,12 @@
   if (tg) { tg.ready(); tg.expand(); }
 
   // ── Настройки Supabase ──────────────────────────────────────
-  // Впиши сюда данные своего проекта (Supabase → Settings → API):
-  //   SUPABASE_URL   — поле "Project URL"
-  //   SUPABASE_KEY   — поле "anon public" (публичный ключ, его можно светить)
-  // Пока поля пустые, приложение показывает демо-объявления и не падает.
+  // SUPABASE_URL уже вписан (твой Project URL).
+  // SUPABASE_KEY — вставь свой Publishable key:
+  //   Supabase → Settings → API Keys → "Publishable key" → кнопка копирования.
+  //   Он начинается на sb_publishable_... и его безопасно светить в браузере.
   const SUPABASE_URL = "https://zngefjtmqhxqqdztjseg.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_k3qBvVe0IT34GN4NpKiynA__xjEGuT0";
+  const SUPABASE_KEY = "ВСТАВЬ_СЮДА_PUBLISHABLE_KEY";
 
   let sb = null;
   if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
@@ -330,6 +337,7 @@
         fac: row.seller_fac || '',
         course: row.seller_course || '',
         desc: row.description || '',
+        photos: row.photo_urls || [],
       }));
       renderFeed();
     } catch (e) {
@@ -346,14 +354,20 @@
       grid.innerHTML = '';
       return;
     }
-    grid.innerHTML = items.map(l => `
-      <div class="item" onclick="openDetail(${l.id})">
-        <div class="item-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>
+    grid.innerHTML = items.map(l => {
+      const hasPhoto = l.photos && l.photos.length;
+      const imgContent = hasPhoto
+        ? `<div class="item-img" style="background-image:url('${l.photos[0]}');background-size:cover;background-position:center"></div>`
+        : `<div class="item-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>`;
+      return `
+      <div class="item" onclick="openDetail('${l.id}')">
+        ${imgContent}
         <div class="item-body">
           <div class="item-title">${l.title}</div>
           <div class="item-price">${money(l.price)}</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   function renderCats() {
@@ -373,6 +387,54 @@
   // id категории по русскому названию (для сохранения в базу)
   const NAME_TO_CATID = { 'Учебники':'books','Техника':'tech','Мебель':'furniture','Одежда':'clothes','Билеты':'tickets','Разное':'other' };
   let selectedCat = 'Учебники';
+
+  // ── Работа с фото в форме ───────────────────────────────────
+  let pickedPhotos = [];  // выбранные файлы (максимум 3)
+
+  function onPhotosPicked(e) {
+    const files = Array.from(e.target.files || []);
+    for (const f of files) {
+      if (pickedPhotos.length >= 3) break;
+      pickedPhotos.push(f);
+    }
+    e.target.value = '';  // сброс, чтобы можно было выбрать те же файлы снова
+    renderPhotoPreviews();
+  }
+
+  function removePhoto(idx) {
+    pickedPhotos.splice(idx, 1);
+    renderPhotoPreviews();
+  }
+
+  function renderPhotoPreviews() {
+    const box = document.getElementById('photosBox');
+    // Кнопку "Добавить" показываем, только пока фото меньше 3
+    const addBtn = pickedPhotos.length < 3
+      ? `<div class="photo-add" onclick="document.getElementById('f-photos').click()">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+           <span>Добавить</span>
+         </div>` : '';
+    const previews = pickedPhotos.map((f, i) => {
+      const url = URL.createObjectURL(f);
+      return `<div class="photo-prev" style="background-image:url('${url}')">
+                <div class="rm" onclick="removePhoto(${i})">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </div>
+              </div>`;
+    }).join('');
+    box.innerHTML = addBtn + previews;
+  }
+
+  // Загрузка одного файла в Supabase Storage, возвращает публичную ссылку
+  async function uploadPhoto(file) {
+    if (!sb) return null;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await sb.storage.from('listing-photos').upload(path, file);
+    if (error) { console.error('upload error:', error); return null; }
+    const { data } = sb.storage.from('listing-photos').getPublicUrl(path);
+    return data.publicUrl;
+  }
 
   function pickCat(el, name) {
     selectedCat = name;
@@ -397,10 +459,15 @@
   }
 
   function openDetail(id) {
-    const l = LISTINGS.find(x => x.id === id);
+    const l = LISTINGS.find(x => String(x.id) === String(id));
+    if (!l) return;
     const [bg, fg] = TAGCOL[l.icon];
+    const hasPhoto = l.photos && l.photos.length;
+    const imgBlock = hasPhoto
+      ? `<div class="detail-img" style="background-image:url('${l.photos[0]}');background-size:cover;background-position:center"></div>`
+      : `<div class="detail-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>`;
     document.getElementById('screen-detail').innerHTML = `
-      <div class="detail-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>
+      ${imgBlock}
       <div class="detail-body">
         <div class="detail-price">${money(l.price)}</div>
         <div class="detail-title">${l.title}</div>
@@ -410,7 +477,7 @@
           <div class="avatar">${l.seller[0]}</div>
           <div>
             <div class="seller-name">${l.seller}</div>
-            <div class="seller-meta">${l.fac} · ${l.course} курс</div>
+            <div class="seller-meta">${l.fac}${l.course ? ' · ' + l.course + ' курс' : ''}</div>
           </div>
         </div>
       </div>
@@ -456,6 +523,19 @@
 
     // Данные пользователя из Телеграма (кто выкладывает)
     const u = tg?.initDataUnsafe?.user;
+
+    // Загружаем выбранные фото в Storage и собираем их ссылки
+    let photoUrls = [];
+    if (sb && pickedPhotos.length) {
+      const btn = document.querySelector('#screen-create .btn-primary');
+      if (btn) { btn.textContent = 'Загрузка фото…'; btn.style.opacity = '0.7'; }
+      for (const f of pickedPhotos) {
+        const url = await uploadPhoto(f);
+        if (url) photoUrls.push(url);
+      }
+      if (btn) { btn.textContent = 'Опубликовать'; btn.style.opacity = '1'; }
+    }
+
     const record = {
       seller_id: u?.id || null,
       seller_name: u?.first_name || 'Студент',
@@ -463,6 +543,7 @@
       price,
       category_id: NAME_TO_CATID[selectedCat] || 'other',
       description: desc,
+      photo_urls: photoUrls,
       status: 'active',
     };
 
@@ -481,6 +562,7 @@
         id: Date.now(), title, price,
         icon: CAT_ICON[record.category_id], cat: selectedCat,
         seller: record.seller_name, fac: '', course: '', desc,
+        photos: pickedPhotos.map(f => URL.createObjectURL(f)),
       });
       renderFeed();
     }
@@ -490,6 +572,8 @@
     document.getElementById('f-price').value = '';
     document.getElementById('f-free').checked = false;
     document.getElementById('f-desc').value = '';
+    pickedPhotos = [];
+    renderPhotoPreviews();
 
     if (tg) { tg.HapticFeedback?.notificationOccurred('success'); tg.showAlert('Объявление опубликовано!'); }
     else alert('Объявление опубликовано!');
