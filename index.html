@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>МАВР</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --mavr-blue: #378ADD;
+    --mavr-blue-dark: #185FA5;
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #1a1a1a);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --card: var(--tg-theme-secondary-bg-color, #f3f3f5);
+    --sep: rgba(128,128,128,0.16);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overscroll-behavior: none;
+  }
+  body { display: flex; flex-direction: column; }
+
+  /* Верхняя панель */
+  .topbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; border-bottom: 0.5px solid var(--sep);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  .paw { width: 28px; height: 28px; border-radius: 50%;
+    background: #B5D4F4; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .paw svg { width: 17px; height: 17px; }
+  .brand { font-weight: 600; font-size: 17px; }
+  .back { font-size: 22px; color: var(--hint); cursor: pointer; line-height: 1; }
+
+  /* Область контента */
+  .screen { flex: 1; overflow-y: auto; padding-bottom: 76px; }
+  .screen.hidden { display: none; }
+
+  /* Поиск + фильтр */
+  .searchrow { padding: 12px 16px 8px; }
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card); border-radius: 10px; padding: 9px 12px;
+    color: var(--hint); font-size: 14px;
+  }
+  .search svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .facfilter { display: flex; gap: 6px; padding: 4px 16px 12px; overflow-x: auto; }
+  .facfilter::-webkit-scrollbar { display: none; }
+  .chip {
+    font-size: 13px; padding: 6px 13px; border-radius: 20px; white-space: nowrap;
+    background: var(--card); color: var(--hint); border: none; cursor: pointer;
+  }
+  .chip.active { background: #E6F1FB; color: var(--mavr-blue-dark); font-weight: 500; }
+
+  /* Сетка объявлений */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+  .item { background: var(--card); border-radius: 12px; overflow: hidden; cursor: pointer; }
+  .item-img { height: 118px; display: flex; align-items: center; justify-content: center; }
+  .item-img svg { width: 40px; height: 40px; opacity: 0.85; }
+  .item-body { padding: 8px 10px 10px; }
+  .item-title { font-size: 13px; line-height: 1.3; margin-bottom: 3px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item-price { font-size: 14px; font-weight: 600; }
+
+  /* Категории */
+  .cats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+  .cat {
+    background: var(--card); border-radius: 14px; padding: 20px 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer;
+  }
+  .cat svg { width: 30px; height: 30px; }
+  .cat span { font-size: 14px; font-weight: 500; }
+
+  /* Карточка товара */
+  .detail-img { height: 240px; display: flex; align-items: center; justify-content: center; }
+  .detail-img svg { width: 72px; height: 72px; opacity: 0.9; }
+  .detail-body { padding: 18px 16px; }
+  .detail-price { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+  .detail-title { font-size: 16px; margin-bottom: 14px; }
+  .cat-tag { display: inline-block; font-size: 12px; padding: 5px 12px;
+    border-radius: 20px; margin-bottom: 16px; }
+  .detail-desc { font-size: 14px; line-height: 1.6; color: var(--text); opacity: 0.85; margin-bottom: 20px; }
+  .seller { display: flex; align-items: center; gap: 11px;
+    padding-top: 16px; border-top: 0.5px solid var(--sep); margin-bottom: 18px; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: #E6F1FB;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; color: var(--mavr-blue-dark); flex-shrink: 0; }
+  .seller-name { font-size: 14px; font-weight: 500; }
+  .seller-meta { font-size: 12px; color: var(--hint); }
+
+  /* Форма создания */
+  .form { padding: 16px; }
+  .field { margin-bottom: 18px; }
+  .label { font-size: 13px; font-weight: 600; color: var(--hint); margin-bottom: 8px; display: block; }
+  .photos { display: flex; gap: 8px; }
+  .photo-add, .photo {
+    width: 74px; height: 74px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .photo-add { background: #E6F1FB; border: 1px dashed var(--mavr-blue);
+    flex-direction: column; gap: 3px; cursor: pointer; }
+  .photo-add svg { width: 24px; height: 24px; }
+  .photo-add span { font-size: 10px; color: var(--mavr-blue-dark); }
+  .photo svg { width: 30px; height: 30px; opacity: 0.85; }
+  input[type=text], textarea {
+    width: 100%; font-size: 15px; font-family: inherit;
+    background: var(--card); border: none; border-radius: 10px;
+    padding: 11px 13px; color: var(--text); outline: none;
+  }
+  textarea { resize: none; min-height: 76px; }
+  .price-row { display: flex; align-items: center; gap: 12px; }
+  .price-row input { flex: 1; }
+  .free { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--hint); white-space: nowrap; }
+  .cat-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat-pill { font-size: 12px; padding: 7px 13px; border-radius: 20px;
+    background: var(--card); color: var(--hint); border: none; cursor: pointer; }
+  .cat-pill.active { color: #fff; font-weight: 500; }
+  .fac-note { display: flex; align-items: center; gap: 8px;
+    padding: 11px 13px; background: var(--card); border-radius: 10px; margin-bottom: 20px; }
+  .fac-note svg { width: 18px; height: 18px; opacity: 0.6; }
+  .fac-note span { font-size: 12px; color: var(--hint); }
+
+  /* Кнопки */
+  .btn-primary {
+    width: 100%; height: 48px; border: none; border-radius: 12px;
+    background: var(--mavr-blue); color: #fff; font-size: 16px; font-weight: 600;
+    font-family: inherit; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; gap: 7px;
+  }
+  .btn-primary:active { opacity: 0.85; }
+  .btn-wrap { padding: 0 16px 20px; }
+
+  /* Нижняя навигация */
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; background: var(--bg); border-top: 0.5px solid var(--sep);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .tab { flex: 1; padding: 9px 0 8px; text-align: center; cursor: pointer; color: var(--hint); }
+  .tab svg { width: 23px; height: 23px; }
+  .tab span { display: block; font-size: 10px; margin-top: 2px; }
+  .tab.active { color: var(--mavr-blue); }
+
+  .empty { text-align: center; padding: 60px 30px; color: var(--hint); }
+  .empty svg { width: 44px; height: 44px; opacity: 0.4; margin-bottom: 14px; }
+  .empty p { font-size: 15px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="back" id="backBtn" style="display:none" onclick="goBack()">‹</span>
+  <div class="paw" id="pawIcon">
+    <svg viewBox="0 0 24 24" fill="#0C447C"><circle cx="6" cy="10" r="2.1"/><circle cx="10.5" cy="7" r="2.1"/><circle cx="15" cy="7.3" r="2.1"/><circle cx="18.5" cy="10.5" r="2.1"/><path d="M12 11c-2.8 0-5 2.4-5 4.8 0 1.9 1.6 2.8 3 2.8.9 0 1.4-.3 2-.3s1.1.3 2 .3c1.4 0 3-.9 3-2.8C17 13.4 14.8 11 12 11z"/></svg>
+  </div>
+  <span class="brand" id="topTitle">МАВР</span>
+</div>
+
+<!-- ЛЕНТА -->
+<div class="screen" id="screen-feed">
+  <div class="searchrow">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      Поиск
+    </div>
+  </div>
+  <div class="facfilter">
+    <button class="chip active">Все факультеты</button>
+    <button class="chip">Мой</button>
+  </div>
+  <div class="grid" id="feedGrid"></div>
+</div>
+
+<!-- КАТЕГОРИИ -->
+<div class="screen hidden" id="screen-cats">
+  <div class="cats" id="catsGrid"></div>
+</div>
+
+<!-- СОЗДАТЬ -->
+<div class="screen hidden" id="screen-create">
+  <div class="form">
+    <div class="field">
+      <label class="label">Фото</label>
+      <div class="photos">
+        <div class="photo-add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Добавить</span>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Название</label>
+      <input type="text" placeholder="Что продаёшь?">
+    </div>
+    <div class="field">
+      <label class="label">Цена, ₽</label>
+      <div class="price-row">
+        <input type="text" placeholder="0" inputmode="numeric">
+        <label class="free"><input type="checkbox"> Даром</label>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Категория</label>
+      <div class="cat-pills" id="createCats"></div>
+    </div>
+    <div class="field">
+      <label class="label">Описание</label>
+      <textarea placeholder="Состояние, детали, что важно знать"></textarea>
+    </div>
+    <div class="fac-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
+      <span>Факультет подставится из твоего профиля</span>
+    </div>
+  </div>
+  <div class="btn-wrap">
+    <button class="btn-primary" onclick="publish()">Опубликовать</button>
+  </div>
+</div>
+
+<!-- ПРОФИЛЬ -->
+<div class="screen hidden" id="screen-profile">
+  <div class="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    <p id="profileText">Здесь будут твои объявления и инвайты</p>
+  </div>
+</div>
+
+<!-- КАРТОЧКА ТОВАРА -->
+<div class="screen hidden" id="screen-detail"></div>
+
+<!-- НАВИГАЦИЯ -->
+<div class="tabbar" id="tabbar">
+  <div class="tab active" data-screen="feed" onclick="switchTab('feed')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>
+    <span>Лента</span>
+  </div>
+  <div class="tab" data-screen="create" onclick="switchTab('create')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    <span>Создать</span>
+  </div>
+  <div class="tab" data-screen="cats" onclick="switchTab('cats')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Категории</span>
+  </div>
+  <div class="tab" data-screen="profile" onclick="switchTab('profile')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    <span>Профиль</span>
+  </div>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  // Иконки категорий (inline SVG, чтобы не тянуть шрифты)
+  const ICONS = {
+    book: '<svg viewBox="0 0 24 24" fill="none" stroke="#085041" stroke-width="2"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 19a2 2 0 002 2h13"/></svg>',
+    laptop: '<svg viewBox="0 0 24 24" fill="none" stroke="#085041" stroke-width="2"><rect x="3" y="5" width="18" height="12" rx="1"/><path d="M2 20h20"/></svg>',
+    chair: '<svg viewBox="0 0 24 24" fill="none" stroke="#633806" stroke-width="2"><path d="M6 3v8h12V3M6 11l-1 6M18 11l1 6M5 15h14M8 21v-2M16 21v-2"/></svg>',
+    shirt: '<svg viewBox="0 0 24 24" fill="none" stroke="#993556" stroke-width="2"><path d="M8 3l4 3 4-3 5 4-3 3-1-1v11H7V9L6 10 3 7z"/></svg>',
+    ticket: '<svg viewBox="0 0 24 24" fill="none" stroke="#72243E" stroke-width="2"><path d="M4 8a2 2 0 012-2h12a2 2 0 012 2 2 2 0 000 4 2 2 0 000 4 2 2 0 01-2 2H6a2 2 0 01-2-2 2 2 0 000-4 2 2 0 000-4z"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="#5F5E5A" stroke-width="2"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg>',
+  };
+  const BG = { book:'#9FE1CB', laptop:'#9FE1CB', chair:'#FAC775', shirt:'#F4C0D1', ticket:'#F4C0D1', box:'#D3D1C7' };
+  const TAGCOL = { book:['#9FE1CB','#085041'], laptop:['#9FE1CB','#085041'], chair:['#FAC775','#633806'], shirt:['#F4C0D1','#993556'], ticket:['#F4C0D1','#72243E'], box:['#D3D1C7','#444441'] };
+  const PILLCOL = { 'Техника':'#5DCAA5','Учебники':'#5DCAA5','Мебель':'#EF9F27','Одежда':'#ED93B1','Билеты':'#ED93B1','Разное':'#B4B2A9' };
+
+  const CATEGORIES = [
+    { name: 'Учебники', icon: 'book' },
+    { name: 'Техника', icon: 'laptop' },
+    { name: 'Мебель', icon: 'chair' },
+    { name: 'Одежда', icon: 'shirt' },
+    { name: 'Билеты', icon: 'ticket' },
+    { name: 'Разное', icon: 'box' },
+  ];
+
+  // Демо-данные. В реальном приложении сюда приедут объявления из бэкенда.
+  const LISTINGS = [
+    { id:1, title:'Матан Демидович, том 1', price:300, icon:'book', cat:'Учебники', seller:'Аня М.', fac:'Институт №8', course:2, desc:'Почти новый, пара пометок карандашом. Забирай в главном корпусе.' },
+    { id:2, title:'Ноутбук Lenovo IdeaPad', price:18000, icon:'laptop', cat:'Техника', seller:'Артём К.', fac:'Институт №8', course:3, desc:'Работает отлично, зарядка в комплекте. Меняю на более мощный.' },
+    { id:3, title:'Стол в общагу', price:0, icon:'chair', cat:'Мебель', seller:'Лена П.', fac:'Институт №1', course:4, desc:'Отдам даром при выезде. Самовывоз из общаги на Волоколамке.' },
+    { id:4, title:'Билет на концерт', price:1200, icon:'ticket', cat:'Билеты', seller:'Дима С.', fac:'Институт №3', course:1, desc:'Не смогу пойти, продаю по номиналу. Электронный, перешлю сразу.' },
+    { id:5, title:'Куртка МАИ, размер M', price:2500, icon:'shirt', cat:'Одежда', seller:'Соня В.', fac:'Институт №1', course:2, desc:'Носила один сезон, состояние отличное. Тёплая.' },
+    { id:6, title:'Готовальня, набор', price:800, icon:'box', cat:'Разное', seller:'Игорь Т.', fac:'Институт №3', course:1, desc:'Полный набор для черчения, почти не пользовался.' },
+  ];
+
+  const money = p => p === 0 ? 'Даром' : p.toLocaleString('ru-RU') + ' ₽';
+
+  function renderFeed(filterCat) {
+    const grid = document.getElementById('feedGrid');
+    const items = filterCat ? LISTINGS.filter(l => l.cat === filterCat) : LISTINGS;
+    if (!items.length) {
+      grid.innerHTML = '';
+      return;
+    }
+    grid.innerHTML = items.map(l => `
+      <div class="item" onclick="openDetail(${l.id})">
+        <div class="item-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>
+        <div class="item-body">
+          <div class="item-title">${l.title}</div>
+          <div class="item-price">${money(l.price)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderCats() {
+    document.getElementById('catsGrid').innerHTML = CATEGORIES.map(c => `
+      <div class="cat" onclick="openCategory('${c.name}')">
+        <div style="color:${TAGCOL[c.icon][1]}">${ICONS[c.icon]}</div>
+        <span>${c.name}</span>
+      </div>`).join('');
+  }
+
+  function renderCreateCats() {
+    document.getElementById('createCats').innerHTML = CATEGORIES.map((c, i) => `
+      <button class="cat-pill${i===0?' active':''}" style="${i===0?`background:${PILLCOL[c.name]}`:''}"
+        onclick="pickCat(this, '${c.name}')">${c.name}</button>`).join('');
+  }
+
+  function pickCat(el, name) {
+    document.querySelectorAll('.cat-pill').forEach(p => { p.classList.remove('active'); p.style.background=''; });
+    el.classList.add('active');
+    el.style.background = PILLCOL[name] || '#5DCAA5';
+  }
+
+  let currentTab = 'feed';
+
+  function switchTab(name) {
+    currentTab = name;
+    ['feed','create','cats','profile','detail'].forEach(s =>
+      document.getElementById('screen-'+s).classList.add('hidden'));
+    document.getElementById('screen-'+name).classList.remove('hidden');
+    document.querySelectorAll('.tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.screen === name));
+    document.getElementById('backBtn').style.display = 'none';
+    document.getElementById('pawIcon').style.display = 'flex';
+    document.getElementById('topTitle').textContent = 'МАВР';
+    document.getElementById('tabbar').style.display = 'flex';
+  }
+
+  function openDetail(id) {
+    const l = LISTINGS.find(x => x.id === id);
+    const [bg, fg] = TAGCOL[l.icon];
+    document.getElementById('screen-detail').innerHTML = `
+      <div class="detail-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>
+      <div class="detail-body">
+        <div class="detail-price">${money(l.price)}</div>
+        <div class="detail-title">${l.title}</div>
+        <span class="cat-tag" style="background:${bg};color:${fg}">${l.cat}</span>
+        <div class="detail-desc">${l.desc}</div>
+        <div class="seller">
+          <div class="avatar">${l.seller[0]}</div>
+          <div>
+            <div class="seller-name">${l.seller}</div>
+            <div class="seller-meta">${l.fac} · ${l.course} курс</div>
+          </div>
+        </div>
+      </div>
+      <div class="btn-wrap">
+        <button class="btn-primary" onclick="contactSeller('${l.seller}')">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.9 4.3c.2-1-.7-1.7-1.6-1.4L2.7 9.8c-1 .4-1 1.8.1 2.1l4.4 1.4 1.7 5.3c.2.7 1.1.9 1.6.3l2.4-2.5 4.5 3.3c.7.5 1.7.1 1.9-.7z"/></svg>
+          Написать продавцу
+        </button>
+      </div>`;
+    ['feed','create','cats','profile'].forEach(s =>
+      document.getElementById('screen-'+s).classList.add('hidden'));
+    document.getElementById('screen-detail').classList.remove('hidden');
+    document.getElementById('backBtn').style.display = 'block';
+    document.getElementById('pawIcon').style.display = 'none';
+    document.getElementById('topTitle').textContent = 'Объявление';
+    document.getElementById('tabbar').style.display = 'none';
+  }
+
+  function openCategory(name) {
+    switchTab('feed');
+    renderFeed(name);
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    document.getElementById('topTitle').textContent = name;
+  }
+
+  function goBack() { switchTab(currentTab === 'detail' ? 'feed' : currentTab); renderFeed(); }
+
+  function contactSeller(name) {
+    if (tg) tg.showAlert('В реальном приложении откроется личка с ' + name + ' в Телеграме.');
+    else alert('Откроется личка с ' + name);
+  }
+
+  function publish() {
+    if (tg) { tg.HapticFeedback?.notificationOccurred('success'); tg.showAlert('Объявление опубликовано!'); }
+    else alert('Объявление опубликовано!');
+    switchTab('feed');
+  }
+
+  renderFeed();
+  renderCats();
+  renderCreateCats();
+</script>
+</body>
+</html>
