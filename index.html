@@ -195,13 +195,13 @@
     </div>
     <div class="field">
       <label class="label">Название</label>
-      <input type="text" placeholder="Что продаёшь?">
+      <input type="text" id="f-title" placeholder="Что продаёшь?">
     </div>
     <div class="field">
       <label class="label">Цена, ₽</label>
       <div class="price-row">
-        <input type="text" placeholder="0" inputmode="numeric">
-        <label class="free"><input type="checkbox"> Даром</label>
+        <input type="text" id="f-price" placeholder="0" inputmode="numeric">
+        <label class="free"><input type="checkbox" id="f-free"> Даром</label>
       </div>
     </div>
     <div class="field">
@@ -210,7 +210,7 @@
     </div>
     <div class="field">
       <label class="label">Описание</label>
-      <textarea placeholder="Состояние, детали, что важно знать"></textarea>
+      <textarea id="f-desc" placeholder="Состояние, детали, что важно знать"></textarea>
     </div>
     <div class="fac-note">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>
@@ -253,9 +253,27 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  // ── Настройки Supabase ──────────────────────────────────────
+  // Впиши сюда данные своего проекта (Supabase → Settings → API):
+  //   SUPABASE_URL   — поле "Project URL"
+  //   SUPABASE_KEY   — поле "anon public" (публичный ключ, его можно светить)
+  // Пока поля пустые, приложение показывает демо-объявления и не падает.
+  const SUPABASE_URL = "https://zngefjtmqhxqqdztjseg.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_k3qBvVe0IT34GN4NpKiynA__xjEGuT0";
+
+  let sb = null;
+  if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+
+  // Соответствие категорий из базы иконкам/цветам интерфейса
+  const CAT_ICON = { books:'book', tech:'laptop', furniture:'chair', clothes:'shirt', tickets:'ticket', other:'box' };
+  const CAT_NAME = { books:'Учебники', tech:'Техника', furniture:'Мебель', clothes:'Одежда', tickets:'Билеты', other:'Разное' };
 
   // Иконки категорий (inline SVG, чтобы не тянуть шрифты)
   const ICONS = {
@@ -279,8 +297,8 @@
     { name: 'Разное', icon: 'box' },
   ];
 
-  // Демо-данные. В реальном приложении сюда приедут объявления из бэкенда.
-  const LISTINGS = [
+  // Демо-данные — показываются, пока не подключён Supabase.
+  const DEMO_LISTINGS = [
     { id:1, title:'Матан Демидович, том 1', price:300, icon:'book', cat:'Учебники', seller:'Аня М.', fac:'Институт №8', course:2, desc:'Почти новый, пара пометок карандашом. Забирай в главном корпусе.' },
     { id:2, title:'Ноутбук Lenovo IdeaPad', price:18000, icon:'laptop', cat:'Техника', seller:'Артём К.', fac:'Институт №8', course:3, desc:'Работает отлично, зарядка в комплекте. Меняю на более мощный.' },
     { id:3, title:'Стол в общагу', price:0, icon:'chair', cat:'Мебель', seller:'Лена П.', fac:'Институт №1', course:4, desc:'Отдам даром при выезде. Самовывоз из общаги на Волоколамке.' },
@@ -288,6 +306,36 @@
     { id:5, title:'Куртка МАИ, размер M', price:2500, icon:'shirt', cat:'Одежда', seller:'Соня В.', fac:'Институт №1', course:2, desc:'Носила один сезон, состояние отличное. Тёплая.' },
     { id:6, title:'Готовальня, набор', price:800, icon:'box', cat:'Разное', seller:'Игорь Т.', fac:'Институт №3', course:1, desc:'Полный набор для черчения, почти не пользовался.' },
   ];
+
+  // Активный список объявлений (демо по умолчанию; заменяется данными из базы)
+  let LISTINGS = [...DEMO_LISTINGS];
+
+  // Загрузка объявлений из Supabase
+  async function loadListings() {
+    if (!sb) return;  // база не подключена — остаёмся на демо
+    try {
+      const { data, error } = await sb
+        .from('listings')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      if (error) { console.error(error); return; }
+      LISTINGS = data.map(row => ({
+        id: row.id,
+        title: row.title,
+        price: row.price,
+        icon: CAT_ICON[row.category_id] || 'box',
+        cat: CAT_NAME[row.category_id] || 'Разное',
+        seller: row.seller_name || 'Студент',
+        fac: row.seller_fac || '',
+        course: row.seller_course || '',
+        desc: row.description || '',
+      }));
+      renderFeed();
+    } catch (e) {
+      console.error('Supabase недоступен, показываю демо:', e);
+    }
+  }
 
   const money = p => p === 0 ? 'Даром' : p.toLocaleString('ru-RU') + ' ₽';
 
@@ -322,7 +370,12 @@
         onclick="pickCat(this, '${c.name}')">${c.name}</button>`).join('');
   }
 
+  // id категории по русскому названию (для сохранения в базу)
+  const NAME_TO_CATID = { 'Учебники':'books','Техника':'tech','Мебель':'furniture','Одежда':'clothes','Билеты':'tickets','Разное':'other' };
+  let selectedCat = 'Учебники';
+
   function pickCat(el, name) {
+    selectedCat = name;
     document.querySelectorAll('.cat-pill').forEach(p => { p.classList.remove('active'); p.style.background=''; });
     el.classList.add('active');
     el.style.background = PILLCOL[name] || '#5DCAA5';
@@ -390,7 +443,54 @@
     else alert('Откроется личка с ' + name);
   }
 
-  function publish() {
+  async function publish() {
+    const title = document.getElementById('f-title').value.trim();
+    const isFree = document.getElementById('f-free').checked;
+    const price = isFree ? 0 : parseInt(document.getElementById('f-price').value.replace(/\D/g, '') || '0', 10);
+    const desc = document.getElementById('f-desc').value.trim();
+
+    if (!title) {
+      if (tg) tg.showAlert('Добавь название'); else alert('Добавь название');
+      return;
+    }
+
+    // Данные пользователя из Телеграма (кто выкладывает)
+    const u = tg?.initDataUnsafe?.user;
+    const record = {
+      seller_id: u?.id || null,
+      seller_name: u?.first_name || 'Студент',
+      title,
+      price,
+      category_id: NAME_TO_CATID[selectedCat] || 'other',
+      description: desc,
+      status: 'active',
+    };
+
+    if (sb) {
+      const { error } = await sb.from('listings').insert(record);
+      if (error) {
+        console.error(error);
+        if (tg) tg.showAlert('Не удалось опубликовать. Попробуй ещё раз.');
+        else alert('Не удалось опубликовать');
+        return;
+      }
+      await loadListings();
+    } else {
+      // Без базы — просто добавим в текущий список, чтобы увидеть результат
+      LISTINGS.unshift({
+        id: Date.now(), title, price,
+        icon: CAT_ICON[record.category_id], cat: selectedCat,
+        seller: record.seller_name, fac: '', course: '', desc,
+      });
+      renderFeed();
+    }
+
+    // Очистим форму
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-price').value = '';
+    document.getElementById('f-free').checked = false;
+    document.getElementById('f-desc').value = '';
+
     if (tg) { tg.HapticFeedback?.notificationOccurred('success'); tg.showAlert('Объявление опубликовано!'); }
     else alert('Объявление опубликовано!');
     switchTab('feed');
@@ -399,6 +499,7 @@
   renderFeed();
   renderCats();
   renderCreateCats();
+  loadListings();  // подтянет реальные объявления, если Supabase подключён
 </script>
 </body>
 </html>
