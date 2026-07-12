@@ -306,12 +306,12 @@
 
   // Демо-данные — показываются, пока не подключён Supabase.
   const DEMO_LISTINGS = [
-    { id:1, title:'Матан Демидович, том 1', price:300, icon:'book', cat:'Учебники', seller:'Аня М.', fac:'Институт №8', course:2, desc:'Почти новый, пара пометок карандашом. Забирай в главном корпусе.' },
-    { id:2, title:'Ноутбук Lenovo IdeaPad', price:18000, icon:'laptop', cat:'Техника', seller:'Артём К.', fac:'Институт №8', course:3, desc:'Работает отлично, зарядка в комплекте. Меняю на более мощный.' },
-    { id:3, title:'Стол в общагу', price:0, icon:'chair', cat:'Мебель', seller:'Лена П.', fac:'Институт №1', course:4, desc:'Отдам даром при выезде. Самовывоз из общаги на Волоколамке.' },
-    { id:4, title:'Билет на концерт', price:1200, icon:'ticket', cat:'Билеты', seller:'Дима С.', fac:'Институт №3', course:1, desc:'Не смогу пойти, продаю по номиналу. Электронный, перешлю сразу.' },
-    { id:5, title:'Куртка МАИ, размер M', price:2500, icon:'shirt', cat:'Одежда', seller:'Соня В.', fac:'Институт №1', course:2, desc:'Носила один сезон, состояние отличное. Тёплая.' },
-    { id:6, title:'Готовальня, набор', price:800, icon:'box', cat:'Разное', seller:'Игорь Т.', fac:'Институт №3', course:1, desc:'Полный набор для черчения, почти не пользовался.' },
+    { id:1, title:'Матан Демидович, том 1', price:300, icon:'book', cat:'Учебники', seller:'Аня М.', username:'anya_test', fac:'Институт №8', course:2, desc:'Почти новый, пара пометок карандашом. Забирай в главном корпусе.' },
+    { id:2, title:'Ноутбук Lenovo IdeaPad', price:18000, icon:'laptop', cat:'Техника', seller:'Артём К.', username:'artem_test', fac:'Институт №8', course:3, desc:'Работает отлично, зарядка в комплекте. Меняю на более мощный.' },
+    { id:3, title:'Стол в общагу', price:0, icon:'chair', cat:'Мебель', seller:'Лена П.', username:'lena_test', fac:'Институт №1', course:4, desc:'Отдам даром при выезде. Самовывоз из общаги на Волоколамке.' },
+    { id:4, title:'Билет на концерт', price:1200, icon:'ticket', cat:'Билеты', seller:'Дима С.', username:'dima_test', fac:'Институт №3', course:1, desc:'Не смогу пойти, продаю по номиналу. Электронный, перешлю сразу.' },
+    { id:5, title:'Куртка МАИ, размер M', price:2500, icon:'shirt', cat:'Одежда', seller:'Соня В.', username:'sonya_test', fac:'Институт №1', course:2, desc:'Носила один сезон, состояние отличное. Тёплая.' },
+    { id:6, title:'Готовальня, набор', price:800, icon:'box', cat:'Разное', seller:'Игорь Т.', username:'igor_test', fac:'Институт №3', course:1, desc:'Полный набор для черчения, почти не пользовался.' },
   ];
 
   // Активный список объявлений (демо по умолчанию; заменяется данными из базы)
@@ -334,6 +334,8 @@
         icon: CAT_ICON[row.category_id] || 'box',
         cat: CAT_NAME[row.category_id] || 'Разное',
         seller: row.seller_name || 'Студент',
+        sellerId: row.seller_id || null,
+        username: row.seller_username || null,
         fac: row.seller_fac || '',
         course: row.seller_course || '',
         desc: row.description || '',
@@ -466,6 +468,23 @@
     const imgBlock = hasPhoto
       ? `<div class="detail-img" style="background-image:url('${l.photos[0]}');background-size:cover;background-position:center"></div>`
       : `<div class="detail-img" style="background:${BG[l.icon]}">${ICONS[l.icon]}</div>`;
+
+    // Своё объявление? Тогда кнопка связи не нужна.
+    const myId = tg?.initDataUnsafe?.user?.id;
+    const isMine = myId && l.sellerId && String(myId) === String(l.sellerId);
+    const actionBlock = isMine
+      ? `<div class="btn-wrap">
+           <div class="fac-note" style="justify-content:center;margin:0">
+             <span>Это твоё объявление</span>
+           </div>
+         </div>`
+      : `<div class="btn-wrap">
+           <button class="btn-primary" onclick="contactSeller('${l.id}')">
+             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.9 4.3c.2-1-.7-1.7-1.6-1.4L2.7 9.8c-1 .4-1 1.8.1 2.1l4.4 1.4 1.7 5.3c.2.7 1.1.9 1.6.3l2.4-2.5 4.5 3.3c.7.5 1.7.1 1.9-.7z"/></svg>
+             Написать продавцу
+           </button>
+         </div>`;
+
     document.getElementById('screen-detail').innerHTML = `
       ${imgBlock}
       <div class="detail-body">
@@ -476,17 +495,12 @@
         <div class="seller">
           <div class="avatar">${l.seller[0]}</div>
           <div>
-            <div class="seller-name">${l.seller}</div>
+            <div class="seller-name">${l.seller}${l.username ? ' · @' + l.username : ''}</div>
             <div class="seller-meta">${l.fac}${l.course ? ' · ' + l.course + ' курс' : ''}</div>
           </div>
         </div>
       </div>
-      <div class="btn-wrap">
-        <button class="btn-primary" onclick="contactSeller('${l.seller}')">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.9 4.3c.2-1-.7-1.7-1.6-1.4L2.7 9.8c-1 .4-1 1.8.1 2.1l4.4 1.4 1.7 5.3c.2.7 1.1.9 1.6.3l2.4-2.5 4.5 3.3c.7.5 1.7.1 1.9-.7z"/></svg>
-          Написать продавцу
-        </button>
-      </div>`;
+      ${actionBlock}`;
     ['feed','create','cats','profile'].forEach(s =>
       document.getElementById('screen-'+s).classList.add('hidden'));
     document.getElementById('screen-detail').classList.remove('hidden');
@@ -505,9 +519,23 @@
 
   function goBack() { switchTab(currentTab === 'detail' ? 'feed' : currentTab); renderFeed(); }
 
-  function contactSeller(name) {
-    if (tg) tg.showAlert('В реальном приложении откроется личка с ' + name + ' в Телеграме.');
-    else alert('Откроется личка с ' + name);
+  // Открывает личку с продавцом в Телеграме и подставляет готовый текст
+  function contactSeller(id) {
+    const l = LISTINGS.find(x => String(x.id) === String(id));
+    if (!l) return;
+    if (!l.username) {
+      const msg = 'У продавца не указан @username в Телеграме, поэтому написать напрямую не получится. Попробуй связаться другим способом.';
+      if (tg) tg.showAlert(msg); else alert(msg);
+      return;
+    }
+    // Готовый текст первого сообщения, чтобы не думать, с чего начать
+    const text = encodeURIComponent(`Привет! Пишу из МАВР по объявлению «${l.title}». Ещё актуально?`);
+    const url = `https://t.me/${l.username}?text=${text}`;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);   // откроет чат прямо в Телеграме
+    } else {
+      window.open(url, '_blank');
+    }
   }
 
   async function publish() {
@@ -539,6 +567,7 @@
     const record = {
       seller_id: u?.id || null,
       seller_name: u?.first_name || 'Студент',
+      seller_username: u?.username || null,   // @ник — по нему откроется личка
       title,
       price,
       category_id: NAME_TO_CATID[selectedCat] || 'other',
